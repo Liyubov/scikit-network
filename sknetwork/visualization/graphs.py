@@ -53,20 +53,25 @@ def rescale(position, width, height, margin, node_size_max, node_weight):
     return position, width, height
 
 
-def get_colors(n: int, labels: np.ndarray, scores: np.ndarray, color: str) -> np.ndarray:
+def get_colors(n: int, labels: Union[dict, np.ndarray, None], scores: np.ndarray, color: str) -> np.ndarray:
     """Return the colors using either labels or scores or default color."""
+    colors = np.array(n * [color]).astype('U64')
     if labels is not None:
         colors_label = STANDARD_COLORS.copy()
-        colors = colors_label[labels % len(colors_label)]
+        if isinstance(labels, dict):
+            index = np.array(list(labels.keys()))
+            values = np.array(list(labels.values())).astype(int)
+            labels = -np.ones(n, dtype=int)
+            labels[index] = values
+        index = labels >= 0
+        colors[index] = colors_label[labels[index] % len(colors_label)]
     elif scores is not None:
         colors_score = COOLWARM_RGB.copy()
         n_colors = colors_score.shape[0]
         colors_score_svg = np.array(['rgb' + str(tuple(colors_score[i])) for i in range(n_colors)])
         scores = (min_max_scaling(scores) * (n_colors - 1)).astype(int)
         colors = colors_score_svg[scores]
-    else:
-        colors = n * [color]
-    return np.array(colors)
+    return colors
 
 
 def get_node_widths(n: int, seeds: Union[dict, list], node_width: float, node_width_max: float) -> np.ndarray:
@@ -156,14 +161,15 @@ def svg_text(pos, text, font_size=12, align_right=False):
 
 
 def svg_graph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optional[np.ndarray] = None,
-              labels: Optional[np.ndarray] = None, scores: Optional[np.ndarray] = None, seeds: Union[list, dict] = None,
-              width: float = 400, height: float = 300, margin: float = 20, margin_text: float = 3,
-              scale: float = 1, node_size: float = 7, node_size_min: float = 1, node_size_max: float = 20,
+              labels: Optional[Union[dict, np.ndarray]] = None, scores: Optional[np.ndarray] = None,
+              seeds: Union[list, dict] = None, width: float = 400, height: float = 300,
+              margin: float = 20, margin_text: float = 3, scale: float = 1,
+              node_size: float = 7, node_size_min: float = 1, node_size_max: float = 20,
               node_weight: bool = False, node_weights: Optional[np.ndarray] = None, node_width: float = 1,
-              node_width_max: float = 3, node_color: str = 'blue', edge_width: float = 1, edge_width_min: float = 0.5,
+              node_width_max: float = 3, node_color: str = 'gray', edge_width: float = 1, edge_width_min: float = 0.5,
               edge_width_max: float = 20, edge_weight: bool = True, edge_color: Optional[str] = None,
-              font_size: int = 12, directed: bool = False) -> str:
-    """Return svg code for a graph.
+              font_size: int = 12, directed: bool = False, filename: Optional[str] = None) -> str:
+    """Return SVG image of a graph.
 
     Parameters
     ----------
@@ -174,7 +180,7 @@ def svg_graph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optiona
     names :
         Names of the nodes.
     labels :
-        Labels of the nodes.
+        Labels of the nodes (negative values mean no label).
     scores :
         Scores of the nodes (measure of importance).
     seeds :
@@ -218,7 +224,9 @@ def svg_graph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optiona
     font_size :
         Font size.
     directed :
-        If True, considers the graph as directed.
+        If ``True``, considers the graph as directed.
+    filename :
+        Filename for saving image (optional).
 
     Returns
     -------
@@ -227,8 +235,11 @@ def svg_graph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optiona
 
     Example
     -------
-    >>> adjacency = sparse.csr_matrix(np.ones((3,3)))
-    >>> position = np.random.random((3,2))
+    >>> from sknetwork.data import karate_club
+    >>> graph = karate_club(True)
+    >>> adjacency = graph.adjacency
+    >>> position = graph.position
+    >>> from sknetwork.visualization import svg_graph
     >>> image = svg_graph(adjacency, position)
     >>> image[1:4]
     'svg'
@@ -291,19 +302,24 @@ def svg_graph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optiona
         for i in range(n):
             svg += svg_text(position[i] + node_sizes[i] + (margin_text, 0), names[i], font_size)
     svg += """</svg>"""
-    return svg
+
+    if filename is not None:
+        with open(filename + '.svg', 'w') as f:
+            f.write(svg)
+    else:
+        return svg
 
 
 def svg_digraph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optional[np.ndarray] = None,
-                labels: Optional[np.ndarray] = None, scores: Optional[np.ndarray] = None,
+                labels: Optional[Union[dict, np.ndarray]] = None, scores: Optional[np.ndarray] = None,
                 seeds: Union[list, dict] = None, width: float = 400, height: float = 300,
                 margin: float = 20, margin_text: float = 10, scale: float = 1,
                 node_size: float = 7, node_size_min: float = 1, node_size_max: float = 20, node_weight: bool = False,
                 node_weights: Optional[np.ndarray] = None, node_width: float = 1, node_width_max: float = 3,
-                node_color: str = 'blue', edge_width: float = 1, edge_width_min: float = 0.5,
+                node_color: str = 'gray', edge_width: float = 1, edge_width_min: float = 0.5,
                 edge_width_max: float = 3, edge_weight: bool = True, edge_color: Optional[str] = None,
-                font_size: int = 12) -> str:
-    """Return svg code for a directed graph.
+                font_size: int = 12, filename: Optional[str] = None) -> str:
+    """Return SVG image of a digraph.
 
     Parameters
     ----------
@@ -314,7 +330,7 @@ def svg_digraph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optio
     names :
         Names of the nodes.
     labels :
-        Labels of the nodes.
+        Labels of the nodes (negative values mean no label).
     scores :
         Scores of the nodes (measure of importance).
     seeds :
@@ -357,6 +373,8 @@ def svg_digraph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optio
         Default color of edges (svg color).
     font_size :
         Font size.
+    filename :
+        Filename for saving image (optional).
 
     Returns
     -------
@@ -365,9 +383,12 @@ def svg_digraph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optio
 
     Example
     -------
-    >>> adjacency = sparse.csr_matrix(np.ones((3,3)))
-    >>> position = np.random.random((3,2))
-    >>> image = svg_digraph(adjacency, position)
+    >>> from sknetwork.data import painters
+    >>> graph = painters(True)
+    >>> adjacency = graph.adjacency
+    >>> position = graph.position
+    >>> from sknetwork.visualization import svg_digraph
+    >>> image = svg_graph(adjacency, position)
     >>> image[1:4]
     'svg'
     """
@@ -377,12 +398,13 @@ def svg_digraph(adjacency: sparse.csr_matrix, position: np.ndarray, names: Optio
                      node_weight=node_weight, node_weights=node_weights, node_width=node_width,
                      node_width_max=node_width_max, node_color=node_color, edge_width=edge_width,
                      edge_width_min=edge_width_min, edge_width_max=edge_width_max, edge_weight=edge_weight,
-                     edge_color=edge_color, font_size=font_size, directed=True)
+                     edge_color=edge_color, font_size=font_size, directed=True, filename=filename)
 
 
 def svg_bigraph(biadjacency: sparse.csr_matrix,
                 names_row: Optional[np.ndarray] = None, names_col: Optional[np.ndarray] = None,
-                labels_row: Optional[np.ndarray] = None, labels_col: Optional[np.ndarray] = None,
+                labels_row: Optional[Union[dict, np.ndarray]] = None,
+                labels_col: Optional[Union[dict, np.ndarray]] = None,
                 scores_row: Optional[np.ndarray] = None, scores_col: Optional[np.ndarray] = None,
                 seeds_row: Union[list, dict] = None, seeds_col: Union[list, dict] = None,
                 position_row: Optional[np.ndarray] = None, position_col: Optional[np.ndarray] = None,
@@ -391,23 +413,23 @@ def svg_bigraph(biadjacency: sparse.csr_matrix,
                 node_size: float = 7, node_size_min: float = 1, node_size_max: float = 20, node_weight: bool = False,
                 node_weights_row: Optional[np.ndarray] = None, node_weights_col: Optional[np.ndarray] = None,
                 node_width: float = 1, node_width_max: float = 3,
-                color_row: str = 'blue', color_col: str = 'red', edge_width: float = 1, edge_width_min: float = 0.5,
+                color_row: str = 'gray', color_col: str = 'gray', edge_width: float = 1, edge_width_min: float = 0.5,
                 edge_width_max: float = 10, edge_color: str = 'black', edge_weight: bool = True,
-                font_size: int = 12) -> str:
-    """Return svg code for a bipartite graph.
+                font_size: int = 12, filename: Optional[str] = None) -> str:
+    """Return SVG image of a bigraph.
 
     Parameters
     ----------
     biadjacency :
-        Adjacency matrix of the graph.
+        Biadjacency matrix of the graph.
     names_row :
         Names of the rows.
     names_col :
         Names of the columns.
     labels_row :
-        Labels of the rows.
+        Labels of the rows (negative values mean no label).
     labels_col :
-        Labels of the columns.
+        Labels of the columns (negative values mean no label).
     scores_row :
         Scores of the rows (measure of importance).
     scores_col :
@@ -464,6 +486,8 @@ def svg_bigraph(biadjacency: sparse.csr_matrix,
         Default color of edges (svg color).
     font_size :
         Font size.
+    filename :
+        Filename for saving image (optional).
 
     Returns
     -------
@@ -472,7 +496,9 @@ def svg_bigraph(biadjacency: sparse.csr_matrix,
 
     Example
     -------
-    >>> biadjacency = sparse.csr_matrix(np.ones((4,3)))
+    >>> from sknetwork.data import movie_actor
+    >>> biadjacency = movie_actor()
+    >>> from sknetwork.visualization import svg_bigraph
     >>> image = svg_bigraph(biadjacency)
     >>> image[1:4]
     'svg'
@@ -551,4 +577,9 @@ def svg_bigraph(biadjacency: sparse.csr_matrix,
         for i in range(n_col):
             svg += svg_text(position_col[i] + (margin_text + node_sizes_col[i], 0), names_col[i], font_size)
     svg += """</svg>"""
-    return svg
+
+    if filename is not None:
+        with open(filename + '.svg', 'w') as f:
+            f.write(svg)
+    else:
+        return svg

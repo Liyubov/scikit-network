@@ -1,3 +1,4 @@
+dist: xenial   # required for Python >= 3.7
 language: python
 
 # lists all jobs to be run (with conditions depending on the setup: ie. making a release or updating develop)
@@ -5,7 +6,7 @@ matrix:
   include:
 # release setup (builds wheels for Python 3.[6,7,8] on OSX, Windows and ManyLinux)
     # perform a linux build (see https://github.com/pypa/manylinux)
-        - if: branch = master
+        - if: tag IS present
           services: docker
           env: DOCKER_IMAGE=quay.io/pypa/manylinux2010_x86_64
                PLAT=manylinux2010_x86_64
@@ -15,7 +16,8 @@ matrix:
           # (bash) scripts to run after install
           script:
             - docker run --rm -e PLAT=$PLAT -v `pwd`:/io $DOCKER_IMAGE $PRE_CMD /io/travis/build-wheels.sh
-            - rm wheelhouse/numpy* wheelhouse/scipy*
+          # remove NumPy and SciPy wheels
+            - sudo rm -f wheelhouse/numpy* wheelhouse/scipy*
             - ls wheelhouse/
           after_success:
               - |
@@ -24,7 +26,7 @@ matrix:
                   python3 -m twine upload wheelhouse/*.whl
                 fi
       # and a mac build (see https://cibuildwheel.readthedocs.io/en/stable/)
-        - if: branch = master
+        - if: tag IS present
           os: osx
           language: shell
           install:
@@ -44,7 +46,7 @@ matrix:
                   python3 -m twine upload wheelhouse/*.whl
                 fi
         # and a windows build (see https://cibuildwheel.readthedocs.io/en/stable/)
-        - if: branch = master
+        - if: tag IS present
           os: windows
           language: shell
           before_install:
@@ -78,6 +80,8 @@ matrix:
                 - python setup.py develop
             script:
                 - py.test --doctest-modules --cov-report=xml --cov=sknetwork
+            after_success:
+                - codecov
         -   if: branch != master
             dist: xenial   # required for Python >= 3.7
             python: 3.7
@@ -87,6 +91,8 @@ matrix:
                 - python setup.py develop
             script:
                 - py.test --doctest-modules --cov-report=xml --cov=sknetwork
+            after_success:
+                - codecov
         -   if: branch != master
             dist: xenial
             python: 3.8
@@ -96,5 +102,7 @@ matrix:
                 - python setup.py develop
             script:
                 - py.test --doctest-modules --cov-report=xml --cov=sknetwork
+            after_success:
+                - codecov
 
 

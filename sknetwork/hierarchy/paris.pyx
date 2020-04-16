@@ -21,7 +21,7 @@ from typing import Union
 from scipy import sparse
 
 from sknetwork.hierarchy.base import BaseHierarchy
-from sknetwork.hierarchy.postprocess import split_dendrogram
+from sknetwork.hierarchy.postprocess import reorder_dendrogram, split_dendrogram
 from sknetwork.utils.format import bipartite2undirected
 from sknetwork.utils.check import check_format, check_probs, is_square
 
@@ -144,6 +144,9 @@ cdef class AggregateGraph:
 class Paris(BaseHierarchy):
     """Agglomerative clustering algorithm that performs greedy merge of nodes based on their similarity.
 
+    * Graphs
+    * Digraphs
+
     The similarity between nodes :math:`i,j` is :math:`\\dfrac{A_{ij}}{w_i w_j}` where
 
     * :math:`A_{ij}` is the weight of edge :math:`i,j`,
@@ -152,8 +155,10 @@ class Paris(BaseHierarchy):
     Parameters
     ----------
     weights :
-            Weights of nodes.
-            ``'degree'`` (default) or ``'uniform'``.
+        Weights of nodes.
+        ``'degree'`` (default) or ``'uniform'``.
+    reorder :
+        If ``True``, reorder the dendrogram in non-decreasing order of height.
 
     Attributes
     ----------
@@ -162,14 +167,16 @@ class Paris(BaseHierarchy):
 
     Examples
     --------
+    >>> from sknetwork.hierarchy import Paris
     >>> from sknetwork.data import house
-    >>> adjacency = house()
     >>> paris = Paris()
-    >>> paris.fit(adjacency).dendrogram_
-    array([[3.        , 2.        , 0.16666667, 2.        ],
+    >>> adjacency = house()
+    >>> dendrogram = paris.fit_transform(adjacency)
+    >>> np.round(dendrogram, 2)
+    array([[3.        , 2.        , 0.17      , 2.        ],
            [1.        , 0.        , 0.25      , 2.        ],
-           [6.        , 4.        , 0.3125    , 3.        ],
-           [7.        , 5.        , 0.66666667, 5.        ]])
+           [6.        , 4.        , 0.31      , 3.        ],
+           [7.        , 5.        , 0.67      , 5.        ]])
 
     Notes
     -----
@@ -178,7 +185,7 @@ class Paris(BaseHierarchy):
 
     See Also
     --------
-    scipy.cluster.hierarchy.dendrogram
+    scipy.cluster.hierarchy.linkage
 
     References
     ----------
@@ -188,10 +195,11 @@ class Paris(BaseHierarchy):
     Workshop on Mining and Learning with Graphs.
     """
 
-    def __init__(self, weights: str = 'degree'):
+    def __init__(self, weights: str = 'degree', reorder: bool = True):
         super(Paris, self).__init__()
 
         self.weights = weights
+        self.reorder = reorder
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -280,7 +288,8 @@ class Paris(BaseHierarchy):
             aggregate_graph.next_cluster += 1
 
         dendrogram = np.array(dendrogram)
-
+        if self.reorder:
+            dendrogram = reorder_dendrogram(dendrogram)
         self.dendrogram_ = dendrogram
         return self
 
@@ -288,11 +297,16 @@ class Paris(BaseHierarchy):
 class BiParis(Paris):
     """Hierarchical clustering of bipartite graphs by the Paris method.
 
+    * Bigraphs
+
     Parameters
     ----------
     weights :
         Weights of nodes.
         ``'degree'`` (default) or ``'uniform'``.
+    reorder :
+        If ``True``, reorder the dendrogram in non-decreasing order of height.
+
     Attributes
     ----------
     dendrogram_ :
@@ -306,11 +320,15 @@ class BiParis(Paris):
 
     Examples
     --------
+    >>> from sknetwork.hierarchy import BiParis
     >>> from sknetwork.data import star_wars
-    >>> biparis = BiParis(engine='python')
+    >>> biparis = BiParis()
     >>> biadjacency = star_wars()
-    >>> biparis.fit_transform(biadjacency).shape
-    (3, 4)
+    >>> dendrogram = biparis.fit_transform(biadjacency)
+    >>> np.round(dendrogram, 2)
+    array([[1.        , 2.        , 0.37      , 2.        ],
+           [4.        , 0.        , 0.55      , 3.        ],
+           [5.        , 3.        , 0.75      , 4.        ]])
 
     Notes
     -----
@@ -318,7 +336,7 @@ class BiParis(Paris):
 
     See Also
     --------
-    scipy.cluster.hierarchy.dendrogram
+    scipy.cluster.hierarchy.linkage
 
     References
     ----------
@@ -327,19 +345,19 @@ class BiParis(Paris):
     <https://arxiv.org/abs/1806.01664>`_
     Workshop on Mining and Learning with Graphs.
     """
-    def __init__(self, weights: str = 'degree'):
-        Paris.__init__(self, weights)
+    def __init__(self, weights: str = 'degree', reorder: bool = True):
+        Paris.__init__(self, weights, reorder)
 
         self.dendrogram_row_ = None
         self.dendrogram_col_ = None
         self.dendrogram_full_ = None
 
     def fit(self, biadjacency: Union[sparse.csr_matrix, np.ndarray]) -> 'BiParis':
-        """Applies the Paris algorithm to
+        """Apply the Paris algorithm to
 
         :math:`A  = \\begin{bmatrix} 0 & B \\\\ B^T & 0 \\end{bmatrix}`
 
-        where :math:`B` is the input treated as a biadjacency matrix.
+        where :math:`B` is the biadjacency matrix of the graph.
 
         Parameters
         ----------

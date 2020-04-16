@@ -14,6 +14,21 @@ from typing import Union, Tuple
 import numpy as np
 
 
+def reorder_dendrogram(dendrogram: np.ndarray):
+    """Reorder the dendrogram in non-decreasing order of height."""
+    n = dendrogram.shape[0] + 1
+    order = np.zeros((2, n - 1),float)
+    order[0] = np.max(dendrogram[:,:2], axis = 1)
+    order[1] = dendrogram[:, 2]
+    index = np.lexsort(order)
+    dendrogram_new = dendrogram[index]
+    index_new = np.arange(2 * n - 1)
+    index_new[n + index] = np.arange(n, 2 * n - 1)
+    dendrogram_new[:, 0] = index_new[dendrogram_new[:, 0].astype(int)]
+    dendrogram_new[:, 1] = index_new[dendrogram_new[:, 1].astype(int)]
+    return dendrogram_new
+
+
 def get_labels(dendrogram: np.ndarray, cluster: dict, sort_clusters: bool, return_dendrogram: bool):
     """Returns the labels from clusters."""
     n = dendrogram.shape[0] + 1
@@ -64,6 +79,13 @@ def cut_straight(dendrogram: np.ndarray, n_clusters: int = 2, sort_clusters: boo
         Cluster of each node.
     dendrogram_aggregate : np.ndarray
         Dendrogram starting from clusters (leaves = clusters).
+
+    Example
+    -------
+    >>> from sknetwork.hierarchy import cut_straight
+    >>> dendrogram = np.array([[0, 1, 0, 2], [2, 3, 1, 3]])
+    >>> cut_straight(dendrogram)
+    array([0, 0, 1])
     """
     if len(dendrogram.shape) != 2 or dendrogram.shape[1] != 4:
         raise ValueError("Check the shape of the dendrogram.")
@@ -106,6 +128,13 @@ def cut_balanced(dendrogram: np.ndarray, max_cluster_size: int = 2, sort_cluster
         Label of each node.
     dendrogram_aggregate : np.ndarray
         Dendrogram starting from clusters (leaves = clusters).
+
+    Example
+    -------
+    >>> from sknetwork.hierarchy import cut_balanced
+    >>> dendrogram = np.array([[0, 1, 0, 2], [2, 3, 1, 3]])
+    >>> cut_balanced(dendrogram)
+    array([0, 0, 1])
     """
     if len(dendrogram.shape) != 2 or dendrogram.shape[1] != 4:
         raise ValueError("Check the shape of the dendrogram.")
@@ -244,23 +273,6 @@ def get_dendrogram(tree, dendrogram=None, index=None, depth=0, size=None, copy_t
                 return get_dendrogram(tree, dendrogram, index_, depth, size)
         else:
             return dendrogram, index
-
-
-def shift_height(dendrogram):
-    """Shift dendrogram to all non-negative heights.
-
-    Parameters
-    ----------
-    dendrogram :
-        The dendrogram to offset
-
-    Returns
-    -------
-    The offset dendrogram
-    """
-    dendrogram = np.array(dendrogram)
-    dendrogram[:, 2] += np.max(np.abs(dendrogram[:, 2])) + 1
-    return dendrogram.astype(float)
 
 
 def split_dendrogram(dendrogram: np.ndarray, shape: tuple):

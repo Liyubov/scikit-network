@@ -27,7 +27,7 @@ class PageRankClassifier(RankClassifier):
     damping_factor:
         Damping factor for personalized PageRank.
     solver : :obj:`str`
-        Which solver to use: 'spsolve', 'lanczos' (default), 'lsqr' or 'halko'.
+        Which solver to use: 'bicgstab', 'lanczos', 'lsqr' or 'halko'.
         Otherwise, the random walk is emulated for a certain number of iterations.
     n_iter : int
         If ``solver`` is not one of the standard values, the pagerank is approximated by emulating the random walk for
@@ -42,6 +42,7 @@ class PageRankClassifier(RankClassifier):
 
     Example
     -------
+    >>> from sknetwork.classification import PageRankClassifier
     >>> from sknetwork.data import karate_club
     >>> pagerank = PageRankClassifier()
     >>> graph = karate_club(metadata=True)
@@ -60,7 +61,7 @@ class PageRankClassifier(RankClassifier):
 
     """
 
-    def __init__(self, damping_factor: float = 0.85, solver: str = 'bicgstab', n_iter: int = 10,
+    def __init__(self, damping_factor: float = 0.85, solver: str = None, n_iter: int = 10,
                  n_jobs: Optional[int] = None, verbose: bool = False):
         algorithm = PageRank(damping_factor, solver, n_iter)
         super(PageRankClassifier, self).__init__(algorithm, n_jobs, verbose)
@@ -99,6 +100,7 @@ class BiPageRankClassifier(RankBiClassifier):
 
     Example
     -------
+    >>> from sknetwork.classification import BiPageRankClassifier
     >>> from sknetwork.data import star_wars
     >>> bipagerank = BiPageRankClassifier()
     >>> biadjacency = star_wars()
@@ -148,6 +150,7 @@ class CoPageRankClassifier(RankBiClassifier):
 
     Example
     -------
+    >>> from sknetwork.classification import CoPageRankClassifier
     >>> from sknetwork.data import star_wars
     >>> copagerank = CoPageRankClassifier()
     >>> biadjacency = star_wars()
