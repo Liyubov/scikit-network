@@ -22,20 +22,21 @@ from sknetwork.utils.format import bipartite2undirected
 
 class LaplacianOperator(LinearOperator):
     """Regularized Laplacian matrix as a scipy LinearOperator."""
-    def __init__(self, adjacency: Union[sparse.csr_matrix, np.ndarray], regularization: float = 0.):
-        super(LaplacianOperator, self).__init__(dtype=float, shape=adjacency.shape)
-        self.regularization = regularization
-        self.weights = adjacency.dot(np.ones(adjacency.shape[1]))
+    def __init__(self, adjacency: Union[sparse.csr_matrix, np.ndarray], regularization: float = 0., dtype=np.float32):
+        super(LaplacianOperator, self).__init__(dtype=dtype, shape=adjacency.shape)
+        self.regularization = dtype(regularization)
+        self.weights = adjacency.dot(np.ones(adjacency.shape[1], dtype=dtype)).astype(dtype, copy=False)
         self.laplacian = sparse.diags(self.weights, format='csr') - adjacency
 
     def _matvec(self, matrix: np.ndarray):
+        matrix.astype(self.dtype, copy=False)
+        n_row = np.int32(self.shape[0])
         prod = self.laplacian.dot(matrix)
-        prod += self.shape[0] * self.regularization * matrix
-        if len(matrix.shape) == 2:
-            prod -= self.regularization * np.tile(matrix.sum(axis=0), (self.shape[0], 1))
+        prod += n_row * self.regularization * matrix
+        if matrix.ndim == 2:
+            prod -= self.regularization * np.tile(matrix.sum(axis=0), (n_row, 1))
         else:
             prod -= self.regularization * matrix.sum()
-
         return prod
 
     def _transpose(self):
@@ -52,18 +53,19 @@ class LaplacianOperator(LinearOperator):
 
 class NormalizedAdjacencyOperator(LinearOperator):
     """Regularized normalized adjacency matrix as a scipy LinearOperator."""
-    def __init__(self, adjacency: Union[sparse.csr_matrix, np.ndarray], regularization: float = 0.):
-        super(NormalizedAdjacencyOperator, self).__init__(dtype=float, shape=adjacency.shape)
-        self.adjacency = adjacency
-        self.regularization = regularization
+    def __init__(self, adjacency: Union[sparse.csr_matrix, np.ndarray], regularization: float = 0., dtype=np.float32):
+        super(NormalizedAdjacencyOperator, self).__init__(dtype=dtype, shape=adjacency.shape)
+        self.adjacency = adjacency.astype(dtype)
+        self.regularization = dtype(regularization)
 
-        n = self.adjacency.shape[0]
-        self.weights_sqrt = np.sqrt(self.adjacency.dot(np.ones(n)) + self.regularization * n)
+        n = np.int32(adjacency.shape[0])
+        self.weights_sqrt = np.sqrt(self.adjacency.dot(np.ones(n, dtype=dtype)) + self.regularization * n)
 
     def _matvec(self, matrix: np.ndarray):
+        matrix.astype(self.dtype, copy=False)
         matrix = (matrix.T / self.weights_sqrt).T
         prod = self.adjacency.dot(matrix)
-        if len(matrix.shape) == 2:
+        if matrix.ndim == 2:
             prod += self.regularization * np.tile(matrix.sum(axis=0), (self.shape[0], 1))
         else:
             prod += self.regularization * matrix.sum()
@@ -148,10 +150,10 @@ class Spectral(BaseEmbedding):
     def __init__(self, n_components: int = 2, normalized_laplacian=True,
                  regularization: Union[None, float] = 0.01, relative_regularization: bool = True,
                  equalize: bool = False, barycenter: bool = True, normalized: bool = True,
-                 solver: Union[str, EigSolver] = 'auto'):
-        super(Spectral, self).__init__()
+                 solver: Union[str, EigSolver] = 'auto', dtype: Union[str, np.dtype] = np.float32):
+        super(Spectral, self).__init__(dtype)
 
-        self.n_components = n_components
+        self.n_components = np.int32(n_components)
         self.normalized_laplacian = normalized_laplacian
 
         if regularization == 0:
@@ -264,10 +266,10 @@ class Spectral(BaseEmbedding):
         if self.normalized:
             embedding = normalize(embedding, p=2)
 
-        self.embedding_ = embedding
-        self.eigenvalues_ = eigenvalues
-        self.eigenvectors_ = eigenvectors
-        self.regularization_ = regularization
+        self.embedding_ = embedding.astype(self.dtype, copy=False)
+        self.eigenvalues_ = eigenvalues.astype(self.dtype, copy=False)
+        self.eigenvectors_ = eigenvectors.astype(self.dtype, copy=False)
+        self.regularization_ = regularization.astype(self.dtype, copy=False)
 
         return self
 
@@ -294,7 +296,7 @@ class Spectral(BaseEmbedding):
         check_nonnegative(adjacency_vectors)
 
         # regularization
-        adjacency_vector_reg = adjacency_vectors.astype(float)
+        adjacency_vector_reg = adjacency_vectors.astype(self.dtype, copy=False)
         if self.regularization_:
             adjacency_vector_reg += self.regularization_
 

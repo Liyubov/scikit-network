@@ -12,10 +12,22 @@ from sknetwork.utils.base import Algorithm
 
 
 class BaseEmbedding(Algorithm, ABC):
-    """Base class for embedding algorithms."""
+    """Base class for embedding algorithms.
 
-    def __init__(self):
+    Parameters
+    ----------
+    dtype :
+        Data type for the embedding.
+
+    Attributes
+    ----------
+    embedding_ : np.ndarray
+        Embedding.
+    """
+
+    def __init__(self, dtype=np.float32):
         self.embedding_ = None
+        self.dtype = dtype
 
     def fit_transform(self, *args, **kwargs) -> np.ndarray:
         """Fit to data and return the embedding. Same parameters as the ``fit`` method.
@@ -39,8 +51,8 @@ class BaseEmbedding(Algorithm, ABC):
 class BaseBiEmbedding(BaseEmbedding, ABC):
     """Base class for embedding algorithms."""
 
-    def __init__(self):
-        super(BaseBiEmbedding, self).__init__()
+    def __init__(self, dtype=np.float32):
+        super(BaseBiEmbedding, self).__init__(dtype)
         self.embedding_row_ = None
         self.embedding_col_ = None
 
